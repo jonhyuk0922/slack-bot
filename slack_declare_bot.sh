@@ -2,6 +2,12 @@
 export PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
 
+# ===== .env 파일 로드 =====
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+  export $(grep -v '^#' "${SCRIPT_DIR}/.env" | xargs)
+fi
+
 # ===== 설정 =====
 # 환경변수에서 웹훅 URL 가져오기
 WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
