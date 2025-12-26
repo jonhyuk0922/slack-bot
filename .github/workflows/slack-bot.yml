@@ -1,0 +1,60 @@
+name: Slack Bot Scheduler
+
+on:
+  schedule:
+    # 평일 오전 8시 (KST = UTC+9, 즉 UTC로 전날 23시)
+    - cron: '0 23 * * 0-4'  # 일-목 23:00 UTC = 월-금 08:00 KST
+    # 평일 오후 6시 30분 (KST 18:30 = UTC 09:30)
+    - cron: '30 9 * * 1-5'  # 월-금 09:30 UTC = 월-금 18:30 KST
+    # 토요일 오후 1시 (KST 13:00 = UTC 04:00)
+    - cron: '0 4 * * 6'     # 토 04:00 UTC = 토 13:00 KST
+  
+  workflow_dispatch:  # 수동 실행 버튼 활성화
+
+jobs:
+  run-slack-bot:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set timezone to KST
+      run: |
+        sudo ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+        echo "Asia/Seoul" | sudo tee /etc/timezone
+    
+    - name: Determine time slot
+      id: timeslot
+      run: |
+        HOUR=$(date +%H)
+        MINUTE=$(date +%M)
+        DAY=$(date +%u)  # 1=월, 2=화, ..., 6=토, 7=일
+        
+        echo "Current time: $HOUR:$MINUTE, Day: $DAY"
+        
+        if [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 13 ]; then
+          echo "slot=saturday" >> $GITHUB_OUTPUT
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ]; then
+          echo "slot=weekday_morning" >> $GITHUB_OUTPUT
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ] && [ "$MINUTE" -eq 30 ]; then
+          echo "slot=weekday_evening" >> $GITHUB_OUTPUT
+        else
+          echo "slot=unknown" >> $GITHUB_OUTPUT
+          echo "Warning: Unknown time slot"
+        fi
+    
+    - name: Run Slack Bot
+      if: steps.timeslot.outputs.slot != 'unknown'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        chmod +x slack_declare_bot.sh
+        ./slack_declare_bot.sh ${{ steps.timeslot.outputs.slot }}
+    
+    - name: Job Summary
+      if: always()
+      run: |
+        echo "### 실행 결과 ✅" >> $GITHUB_STEP_SUMMARY
+        echo "- 실행 시간: $(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
+        echo "- 타임슬롯: ${{ steps.timeslot.outputs.slot }}" >> $GITHUB_STEP_SUMMARY
