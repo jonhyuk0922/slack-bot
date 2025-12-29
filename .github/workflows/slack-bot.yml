@@ -14,6 +14,7 @@ on:
 jobs:
   run-slack-bot:
     runs-on: ubuntu-latest
+    environment: Configure SLACK_WEBHOOK_URL
     
     steps:
     - name: Checkout repository
