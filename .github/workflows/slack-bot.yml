@@ -1,5 +1,4 @@
 name: Slack Bot Scheduler
-
 on:
   schedule:
     # 평일 오전 8시 (KST = UTC+9, 즉 UTC로 전날 23시)
@@ -9,7 +8,7 @@ on:
     # 토요일 오후 1시 (KST 13:00 = UTC 04:00)
     - cron: '0 4 * * 6'     # 토 04:00 UTC = 토 13:00 KST
   
-  workflow_dispatch:  # 수동 실행 버튼 활성화
+  workflow_dispatch:
 
 jobs:
   run-slack-bot:
@@ -30,19 +29,26 @@ jobs:
       run: |
         HOUR=$(date +%H)
         MINUTE=$(date +%M)
-        DAY=$(date +%u)  # 1=월, 2=화, ..., 6=토, 7=일
+        DAY=$(date +%u)
         
         echo "Current time: $HOUR:$MINUTE, Day: $DAY"
         
-        if [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 13 ]; then
+        # 토요일 오후 1시 (12:30 ~ 13:30 범위)
+        if [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 12 ] && [ "$MINUTE" -ge 30 ]; then
           echo "slot=saturday" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ]; then
+        elif [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 13 ] && [ "$MINUTE" -le 30 ]; then
+          echo "slot=saturday" >> $GITHUB_OUTPUT
+        # 평일 오전 8시 (7:50 ~ 8:20 범위)
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 7 ] && [ "$MINUTE" -ge 50 ]; then
           echo "slot=weekday_morning" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ] && [ "$MINUTE" -eq 30 ]; then
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ] && [ "$MINUTE" -le 20 ]; then
+          echo "slot=weekday_morning" >> $GITHUB_OUTPUT
+        # 평일 저녁 6시 30분 (18:25 ~ 18:40 범위)
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ] && [ "$MINUTE" -ge 25 ] && [ "$MINUTE" -le 40 ]; then
           echo "slot=weekday_evening" >> $GITHUB_OUTPUT
         else
           echo "slot=unknown" >> $GITHUB_OUTPUT
-          echo "Warning: Unknown time slot"
+          echo "Warning: Unknown time slot (Hour: $HOUR, Minute: $MINUTE, Day: $DAY)"
         fi
     
     - name: Run Slack Bot
@@ -59,3 +65,6 @@ jobs:
         echo "### 실행 결과 ✅" >> $GITHUB_STEP_SUMMARY
         echo "- 실행 시간: $(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
         echo "- 타임슬롯: ${{ steps.timeslot.outputs.slot }}" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.timeslot.outputs.slot }}" == "unknown" ]; then
+          echo "- ⚠️ 경고: 알 수 없는 시간대에서 실행됨" >> $GITHUB_STEP_SUMMARY
+        fi
