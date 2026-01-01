@@ -43,8 +43,8 @@ jobs:
           echo "slot=weekday_morning" >> $GITHUB_OUTPUT
         elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ] && [ "$MINUTE" -le 20 ]; then
           echo "slot=weekday_morning" >> $GITHUB_OUTPUT
-        # 평일 저녁 6시 30분 (18:25 ~ 18:40 범위)
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ] && [ "$MINUTE" -ge 25 ] && [ "$MINUTE" -le 40 ]; then
+        # 평일 저녁 6시 30분 (18:20 ~ 18:50 범위)
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ] && [ "$MINUTE" -ge 20 ] && [ "$MINUTE" -le 50 ]; then
           echo "slot=weekday_evening" >> $GITHUB_OUTPUT
         else
           echo "slot=unknown" >> $GITHUB_OUTPUT
