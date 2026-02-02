@@ -1,12 +1,15 @@
 name: Slack Bot Scheduler
 on:
   schedule:
-    # 평일 오전 8시 (KST = UTC+9, 즉 UTC로 전날 23시)
-    - cron: '0 23 * * 0-4'  # 일-목 23:00 UTC = 월-금 08:00 KST
-    # 평일 오후 6시 30분 (KST 18:30 = UTC 09:30)
-    - cron: '30 9 * * 1-5'  # 월-금 09:30 UTC = 월-금 18:30 KST
-    # 토요일 오후 1시 (KST 13:00 = UTC 04:00)
-    - cron: '0 4 * * 6'     # 토 04:00 UTC = 토 13:00 KST
+    # 평일 오전 8시 알람 (조금 일찍 시작되도록 07:45 KST 근처에 트리거)
+    # 07:45 KST = 전날 22:45 UTC
+    - cron: '45 22 * * 0-4'  # 일-목 22:45 UTC ≈ 월-금 07:45 KST
+    # 평일 오후 6시 30분 알람 (18:00 KST 근처에 트리거)
+    # 18:00 KST = 09:00 UTC
+    - cron: '0 9 * * 1-5'    # 월-금 09:00 UTC ≈ 월-금 18:00 KST
+    # 토요일 오후 1시 알람 (12:30 KST 근처에 트리거)
+    # 12:30 KST = 03:30 UTC
+    - cron: '30 3 * * 6'     # 토 03:30 UTC ≈ 토 12:30 KST
   
   workflow_dispatch:
 
@@ -33,18 +36,22 @@ jobs:
         
         echo "Current time: $HOUR:$MINUTE, Day: $DAY"
         
-        # 토요일 오후 1시 (12:30 ~ 13:30 범위)
-        if [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 12 ] && [ "$MINUTE" -ge 30 ]; then
+        # 토요일 오후 1시 (12:00 ~ 14:00 범위)
+        if [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 12 ]; then
           echo "slot=saturday" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 13 ] && [ "$MINUTE" -le 30 ]; then
+        elif [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 13 ]; then
           echo "slot=saturday" >> $GITHUB_OUTPUT
-        # 평일 오전 8시 (7:50 ~ 8:20 범위)
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 7 ] && [ "$MINUTE" -ge 50 ]; then
+        elif [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 14 ] && [ "$MINUTE" -le 0 ]; then
+          echo "slot=saturday" >> $GITHUB_OUTPUT
+        # 평일 오전 8시 (7:30 ~ 8:45 범위)
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 7 ] && [ "$MINUTE" -ge 30 ]; then
           echo "slot=weekday_morning" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ] && [ "$MINUTE" -le 20 ]; then
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ] && [ "$MINUTE" -le 45 ]; then
           echo "slot=weekday_morning" >> $GITHUB_OUTPUT
-        # 평일 저녁 6시 30분 (18:20 ~ 18:50 범위)
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ] && [ "$MINUTE" -ge 20 ] && [ "$MINUTE" -le 50 ]; then
+        # 평일 저녁 6시 30분 (18:00 ~ 19:15 범위)
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ]; then
+          echo "slot=weekday_evening" >> $GITHUB_OUTPUT
+        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 19 ] && [ "$MINUTE" -le 15 ]; then
           echo "slot=weekday_evening" >> $GITHUB_OUTPUT
         else
           echo "slot=unknown" >> $GITHUB_OUTPUT
