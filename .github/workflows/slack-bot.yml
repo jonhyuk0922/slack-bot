@@ -1,77 +1,90 @@
 name: Slack Bot Scheduler
+
 on:
   schedule:
-    # 평일 오전 8시 알람 (조금 일찍 시작되도록 07:45 KST 근처에 트리거)
+    # 평일 오전 07:45 KST
     # 07:45 KST = 전날 22:45 UTC
-    - cron: '45 22 * * 0-4'  # 일-목 22:45 UTC ≈ 월-금 07:45 KST
-    # 평일 오후 6시 30분 알람 (18:00 KST 근처에 트리거)
+    - cron: '45 22 * * 0-4'
+
+    # 평일 오후 18:00 KST
     # 18:00 KST = 09:00 UTC
-    - cron: '0 9 * * 1-5'    # 월-금 09:00 UTC ≈ 월-금 18:00 KST
-    # 토요일 오후 1시 알람 (12:30 KST 근처에 트리거)
+    - cron: '0 9 * * 1-5'
+
+    # 토요일 오후 12:30 KST
     # 12:30 KST = 03:30 UTC
-    - cron: '30 3 * * 6'     # 토 03:30 UTC ≈ 토 12:30 KST
-  
+    - cron: '30 3 * * 6'
+
   workflow_dispatch:
+    inputs:
+      mode:
+        description: '실행할 모드 선택'
+        required: false
+        default: 'weekday_morning'
+        type: choice
+        options:
+          - weekday_morning
+          - weekday_evening
+          - saturday
 
 jobs:
   run-slack-bot:
     runs-on: ubuntu-latest
     environment: Configure SLACK_WEBHOOK_URL
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set timezone to KST
-      run: |
-        sudo ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
-        echo "Asia/Seoul" | sudo tee /etc/timezone
-    
-    - name: Determine time slot
-      id: timeslot
-      run: |
-        HOUR=$(date +%H)
-        MINUTE=$(date +%M)
-        DAY=$(date +%u)
-        
-        echo "Current time: $HOUR:$MINUTE, Day: $DAY"
-        
-        # 토요일 오후 1시 (12:00 ~ 14:00 범위)
-        if [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 12 ]; then
-          echo "slot=saturday" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 13 ]; then
-          echo "slot=saturday" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -eq 6 ] && [ "$HOUR" -eq 14 ] && [ "$MINUTE" -le 0 ]; then
-          echo "slot=saturday" >> $GITHUB_OUTPUT
-        # 평일 오전 8시 (7:30 ~ 8:45 범위)
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 7 ] && [ "$MINUTE" -ge 30 ]; then
-          echo "slot=weekday_morning" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 8 ] && [ "$MINUTE" -le 45 ]; then
-          echo "slot=weekday_morning" >> $GITHUB_OUTPUT
-        # 평일 저녁 6시 30분 (18:00 ~ 19:15 범위)
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 18 ]; then
-          echo "slot=weekday_evening" >> $GITHUB_OUTPUT
-        elif [ "$DAY" -le 5 ] && [ "$HOUR" -eq 19 ] && [ "$MINUTE" -le 15 ]; then
-          echo "slot=weekday_evening" >> $GITHUB_OUTPUT
-        else
-          echo "slot=unknown" >> $GITHUB_OUTPUT
-          echo "Warning: Unknown time slot (Hour: $HOUR, Minute: $MINUTE, Day: $DAY)"
-        fi
-    
-    - name: Run Slack Bot
-      if: steps.timeslot.outputs.slot != 'unknown'
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      run: |
-        chmod +x slack_declare_bot.sh
-        ./slack_declare_bot.sh ${{ steps.timeslot.outputs.slot }}
-    
-    - name: Job Summary
-      if: always()
-      run: |
-        echo "### 실행 결과 ✅" >> $GITHUB_STEP_SUMMARY
-        echo "- 실행 시간: $(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
-        echo "- 타임슬롯: ${{ steps.timeslot.outputs.slot }}" >> $GITHUB_STEP_SUMMARY
-        if [ "${{ steps.timeslot.outputs.slot }}" == "unknown" ]; then
-          echo "- ⚠️ 경고: 알 수 없는 시간대에서 실행됨" >> $GITHUB_STEP_SUMMARY
-        fi
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set timezone to KST
+        run: |
+          sudo ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+          echo "Asia/Seoul" | sudo tee /etc/timezone
+
+      - name: Determine mode
+        id: mode
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "event_schedule=${{ github.event.schedule }}"
+          echo "manual_input_mode=${{ github.event.inputs.mode }}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="${{ github.event.inputs.mode }}"
+            if [ -z "$MODE" ]; then
+              MODE="weekday_morning"
+            fi
+          else
+            case "${{ github.event.schedule }}" in
+              "45 22 * * 0-4")
+                MODE="weekday_morning"
+                ;;
+              "0 9 * * 1-5")
+                MODE="weekday_evening"
+                ;;
+              "30 3 * * 6")
+                MODE="saturday"
+                ;;
+              *)
+                MODE="weekday_morning"
+                echo "Warning: 예상하지 못한 schedule 값이라 weekday_morning으로 실행합니다."
+                ;;
+            esac
+          fi
+
+          echo "selected_mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "선택된 모드: $MODE"
+
+      - name: Run Slack Bot
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          chmod +x slack_declare_bot.sh
+          ./slack_declare_bot.sh "${{ steps.mode.outputs.selected_mode }}"
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "### 실행 결과 ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- 실행 시간: $(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_STEP_SUMMARY
+          echo "- 이벤트 타입: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- schedule 값: ${{ github.event.schedule }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 최종 실행 모드: ${{ steps.mode.outputs.selected_mode }}" >> $GITHUB_STEP_SUMMARY
